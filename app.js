@@ -86,7 +86,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#guide
 
 // GitHub public contribution calendar with the original dated offline snapshot.
 (() => {
-  const user = 'fromnowheretobefound', select = $('#gh-year'), grid = $('#gh-grid');
+  const user = 'georgiarachel07', select = $('#gh-year'), grid = $('#gh-grid');
   let history, sourceNote = '';
   const format = new Intl.DateTimeFormat('en', {month:'long', day:'numeric', year:'numeric', timeZone:'UTC'});
   function render() {
