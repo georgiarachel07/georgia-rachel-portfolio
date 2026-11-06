@@ -21,4 +21,5 @@ See [CREDITS.md](CREDITS.md) for animation inspiration. No Nagomi source or asse
 
 ## Toolkit and testimonials
 
-Thirteen inline Devicon technology logos accompany eleven user-supplied testimonials. Surnames are masked, companies omitted except AMA University, and professional roles retained. The cards flow right-to-left over a koi backdrop with accessible pause and reduced-motion controls.
+Twenty-five inline Devicon technology logos accompany eleven user-supplied testimonials. Surnames are masked, companies omitted except AMA University, and professional roles retained. The cards flow right-to-left over a koi backdrop with accessible pause and reduced-motion controls.
+Toolkit: 10 languages/web technologies and 15 tools/platforms, displayed in two seamless horizontal rows. Pause on hover/focus, manual pause, offscreen sleep and shared motion preference are supported.

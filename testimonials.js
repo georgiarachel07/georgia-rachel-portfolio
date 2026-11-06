@@ -18,3 +18,35 @@
   document.addEventListener('portfolio:motion',e=>{if(!e.detail.enabled){button.disabled=true;button.textContent='Motion is paused';}else{button.disabled=false;setPaused(manuallyPaused);}});
   if(document.documentElement.classList.contains('motion-paused')){button.disabled=true;button.textContent='Motion is paused';}
 })();
+
+/* Toolkit motion shares the portfolio's motion preference. */
+(() => {
+  const catalog=document.querySelector('.tech-catalog'),button=catalog.querySelector('.tech-pause');
+  let paused=false,visible=false;
+  const motion=matchMedia('(prefers-reduced-motion: reduce)');
+  const rows=[...catalog.querySelectorAll('.tech-track')];
+  rows.forEach(track=>{
+    const group=track.querySelector('.tech-grid'),copy=group.cloneNode(true);
+    copy.setAttribute('aria-hidden','true');copy.inert=true;
+    copy.querySelectorAll('[id]').forEach(el=>{
+      const previous=el.id,next=previous+'-copy';el.id=next;
+      copy.querySelectorAll('*').forEach(child=>[...child.attributes].forEach(attr=>{
+        if(attr.value.includes('#'+previous))child.setAttribute(attr.name,attr.value.replaceAll('#'+previous,'#'+next));
+      }));
+    });
+    track.append(copy);
+    const size=()=>track.style.setProperty('--toolkit-duration',`${(group.getBoundingClientRect().width+12)/24}s`);
+    new ResizeObserver(size).observe(group);size();
+  });
+  function sync(){
+    const disabled=motion.matches||document.documentElement.classList.contains('motion-paused');
+    catalog.classList.toggle('toolkit-stopped',paused||disabled);
+    catalog.classList.toggle('toolkit-active',visible&&!document.hidden);
+    button.disabled=disabled;button.setAttribute('aria-pressed',String(paused));
+    button.textContent=disabled?'Motion is paused':paused?'Resume toolkit ▶':'Pause toolkit Ⅱ';
+  }
+  button.addEventListener('click',()=>{paused=!paused;sync();});
+  catalog.querySelectorAll('.tech-viewport').forEach(view=>view.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){paused=true;sync();}}));
+  new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;sync();},{threshold:.05}).observe(catalog);
+  document.addEventListener('visibilitychange',sync);document.addEventListener('portfolio:motion',sync);motion.addEventListener('change',sync);sync();
+})();
