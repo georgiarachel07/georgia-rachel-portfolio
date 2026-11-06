@@ -7,29 +7,35 @@
     {name:'Kohaku',color:'#e9e5cb',mark:'#ba593c',type:'koi',note:'Ivory scales, vermilion islands. A classic.'},
     {name:'Golden Ogon',color:'#d4b46c',mark:'#f1d58b',type:'koi',note:'A small flash of gold beneath the surface.'},
     {name:'Showa',color:'#e8e4d3',mark:'#272d28',type:'koi',note:'Ink, ivory, and red. Every pattern is different.'},
-    {name:'Shusui',color:'#9eb8bd',mark:'#b4563c',type:'koi',note:'Blue-grey watercolors with a warm copper edge.'},
+    {name:'Shiro Bekko',color:'#e9e3cd',mark:'#303d3a',type:'koi',note:'Ivory watercolors with quiet ink markings.'},
     {name:'Tancho',color:'#eee9d4',mark:'#b34c34',type:'koi',note:'One red crown. A very quiet little triumph.'},
     {name:'Stray bug',type:'bug',color:'#d5b66f',note:'One less bug in the ecosystem. Into the bin it goes.'},
     {name:'Waterborne virus',type:'virus',color:'#bd857d',note:'A fictional digital pest. Safely contained in the cleanup bin.'},
     {name:'Discarded can',type:'trash',color:'#b6c0a7',note:'Not a fish, but still a good catch. The pond thanks you.'},
     {name:'Tangled cable',type:'cable',color:'#d0ad7e',note:'A little cable management, even after hours.'}
   ];
-  let saved={fish:0,clean:0,found:[]};
-  try{const v=JSON.parse(localStorage.getItem('georgia-quiet-catch-v1'));if(v&&Number.isFinite(v.fish)&&Number.isFinite(v.clean)&&Array.isArray(v.found))saved={fish:Math.max(0,Math.floor(v.fish)),clean:Math.max(0,Math.floor(v.clean)),found:v.found.filter(n=>kinds.slice(0,5).some(k=>k.name===n))};}catch{}
-  let state='welcome',paused=false,held=false,raf=0,last=0,clock=0,timer=0,w=900,h=480,cast={x:.57,y:.43},aim={x:.57,y:.43},item=null,progress=.35,zone=.35,velocity=0,target=.5,phase=0,landed=false,deck=[],bites=0;
+  let saved={fish:0,clean:0,found:[],inventory:[]};
+  try{const v=JSON.parse(localStorage.getItem('georgia-quiet-catch-v1'));if(v&&Number.isFinite(v.fish)&&Number.isFinite(v.clean)&&Array.isArray(v.found))saved={inventory:Array.isArray(v.inventory)?v.inventory.filter(a=>a&&typeof a.id==='string'&&Array.isArray(a.palette)&&Array.isArray(a.pose)):[],fish:Math.max(0,Math.floor(v.fish)),clean:Math.max(0,Math.floor(v.clean)),found:v.found.filter(n=>kinds.slice(0,5).some(k=>k.name===n))};}catch{}
+  let state='welcome',paused=false,held=false,raf=0,last=0,clock=0,timer=0,w=900,h=480,cast={x:.57,y:.43},aim={x:.57,y:.43},item=null,progress=.35,zone=.35,velocity=0,target=.5,phase=0,landed=false,deck=[],bites=0,tracked=null,haulFrom={x:.57,y:.43};
   let reelGesture=false,lastReelInput=-Infinity;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
   function announce(text){$('#fishing-status').textContent=text;}
   function label(text){action.textContent=text;}
-  function pondSignal(){document.dispatchEvent(new CustomEvent('portfolio:fishing',{detail:{state,paused,x:cast.x,y:cast.y}}));}
-  function setState(next){state=next;timer=0;pondSignal();held=false;action.classList.remove('is-held');canvas.dataset.phase=state;meter.hidden=state!=='reeling';result.hidden=!['landed','disposing','releasing'].includes(state);}
+  function pondSignal(){document.dispatchEvent(new CustomEvent('portfolio:fishing',{detail:{state,paused,x:cast.x,y:cast.y,fishId:tracked?.model.id}}));}
+  function setState(next){state=next;timer=0;pondSignal();held=false;action.classList.remove('is-held');canvas.dataset.phase=state;meter.hidden=state!=='reeling';result.hidden=!['landed','disposing','hauling'].includes(state);}
   function journal(){
-    $('#fishing-count').textContent=saved.fish;$('#cleanup-count').textContent=saved.clean;$('#variety-count').textContent=saved.found.length+' / 5';
+    $('#fishing-count').textContent=saved.inventory.length;$('#cleanup-count').textContent=saved.clean;$('#variety-count').textContent=saved.found.length+' / 5';
     $('#fishing-journal').replaceChildren(...kinds.slice(0,5).map(k=>{const el=document.createElement('span'),found=saved.found.includes(k.name);el.className=found?'found':'';el.textContent=found?'✓ '+k.name:'— Undiscovered koi';return el;}));
+    renderInventory();
     try{localStorage.setItem('georgia-quiet-catch-v1',JSON.stringify(saved));}catch{}
   }
+  function renderInventory(){
+    const list=$('#fishing-inventory');list.replaceChildren();
+    if(!saved.inventory.length){const p=document.createElement('p');p.textContent='Your first koi is waiting in the pond.';list.append(p);return;}
+    saved.inventory.slice().reverse().forEach(a=>{const card=document.createElement('figure'),thumbnail=document.createElement('canvas'),caption=document.createElement('figcaption');thumbnail.width=150;thumbnail.height=72;thumbnail.setAttribute('aria-hidden','true');caption.textContent=a.name;card.dataset.fishId=a.id;card.append(thumbnail,caption);list.append(card);document.dispatchEvent(new CustomEvent('portfolio:fishing-render',{detail:{ctx:thumbnail.getContext('2d'),appearance:a,x:75,y:36,size:58}}));});
+  }
   function drawItem(k,x,y,size,angle=0){
-    if(!k)return;ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.lineWidth=1.4;ctx.fillStyle=k.color;ctx.strokeStyle='#e5e6c6';
+    if(!k)return;if(k.type==='koi'&&tracked){tracked.draw(ctx,x,y,size,angle);return;}ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.lineWidth=1.4;ctx.fillStyle=k.color;ctx.strokeStyle='#e5e6c6';
     if(k.type==='koi'){
       ctx.beginPath();ctx.moveTo(-size*.45,0);ctx.quadraticCurveTo(-size*.65,-size*.35,-size*.8,-size*.28);ctx.lineTo(-size*.68,0);ctx.lineTo(-size*.8,size*.28);ctx.quadraticCurveTo(-size*.6,size*.3,-size*.45,0);ctx.fill();
       ctx.globalAlpha=.7;ctx.beginPath();ctx.ellipse(-size*.05,0,size*.22,size*.29,-.3,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
@@ -56,9 +62,9 @@
     const binX=dockW*.18,binY=h*.88;
     ctx.save();ctx.translate(binX,binY);ctx.fillStyle='#304d3b';ctx.beginPath();ctx.roundRect(-14*scale,-18*scale,28*scale,36*scale,3);ctx.fill();ctx.strokeStyle='#bcc79d';ctx.stroke();ctx.fillStyle='#c6d5a9';ctx.fillRect(-17*scale,-21*scale,34*scale,5*scale);ctx.font=`${9*scale}px monospace`;ctx.textAlign='center';ctx.fillText('BIN',0,4*scale);ctx.restore();
     // Shared linen / straw palette; poses are driven by the game phase.
-    const victory=['landed','disposing','releasing'].includes(state),struggle=state==='reeling'||state==='bite';
+    const victory=['landed','disposing','hauling'].includes(state),struggle=state==='reeling'||state==='bite';
     const reduced=document.documentElement.classList.contains('motion-paused');
-    const lift=victory?(state==='landed'?1-Math.pow(1-clamp(timer/.4,0,1),3):1):0;
+    const lift=victory?(state==='hauling'?clamp(timer/.9,0,1):1):0;
     const tug=struggle?Math.sin(clock*11)*2.5+Math.sin(clock*4.3)*3:0;
     const arm=state==='disposing'?Math.sin(clamp(timer/1.5,0,1)*Math.PI)*.8:state==='casting'?-Math.sin(timer/.8*Math.PI)*.7:held?-.18:0;
     ctx.save();ctx.translate(sx+tug*scale,sy);ctx.scale(scale,scale);
@@ -94,7 +100,7 @@
       if(state==='bite'){ctx.fillStyle='#f3e2a7';ctx.font='bold 40px serif';ctx.textAlign='center';ctx.fillText('!',bx,by-27);}
     }
     if(state==='idle'&&!paused){ctx.strokeStyle='#ecedc755';ctx.setLineDash([3,5]);ctx.beginPath();ctx.ellipse(aim.x*w,aim.y*h,18,9,0,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
-    if(['landed','disposing','releasing'].includes(state)){
+    if(['landed','disposing','hauling'].includes(state)){
       let x=sx+2*scale,y=sy-(30+lift*58)*scale,a=Math.sin(clock*3)*.035;
       if(state==='landed'){
         const burst=clamp(timer/1.1,0,1);
@@ -103,7 +109,7 @@
         ctx.strokeStyle='#d9dca944';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(x,y,42*scale,25*scale,0,0,Math.PI*2);ctx.stroke();
       }
       if(state==='disposing'){const q=clamp(timer/1.5,0,1);x=lerp(x,binX,q);y=lerp(y,binY-17,q)-Math.sin(q*Math.PI)*h*.25;a=q*5;if(q>.96)ctx.globalAlpha=0;}
-      if(state==='releasing'){const q=clamp(timer/1.5,0,1);x=lerp(x,w*.57,q);y=lerp(y,h*.45,q)-Math.sin(q*Math.PI)*h*.16;ctx.globalAlpha=1-q;}
+      if(state==='hauling'){const q=clamp(timer/.9,0,1),ease=1-Math.pow(1-q,3);x=lerp(haulFrom.x*w,sx+2*scale,ease);y=lerp(haulFrom.y*h,sy-88*scale,ease)-Math.sin(q*Math.PI)*h*.12;a=0;ctx.strokeStyle='#e8e7c699';ctx.beginPath();ctx.moveTo(tipX,tipY);ctx.lineTo(x,y);ctx.stroke();}
       drawItem(item,x,y,58*scale,a);ctx.globalAlpha=1;
     }
     if(paused){ctx.fillStyle='#102c2399';ctx.fillRect(0,0,w,h);ctx.fillStyle='#edf0d9';ctx.font='italic 34px Georgia';ctx.textAlign='center';ctx.fillText('A moment of stillness.',w/2,h*.45);ctx.font='12px monospace';ctx.fillText('RESUME WHEN YOU’RE READY',w/2,h*.45+34);}
@@ -115,15 +121,15 @@
     return kinds[deck.pop()];
   }
   function idle(message='Choose a spot, then cast your line.'){setState('idle');$('#fishing-phase').textContent='01 / CAST';announce(message);label('Cast line ↗');action.disabled=false;}
-  function castLine(){item=pick();cast={...aim};phase=Math.random()*6.28;landed=false;setState('casting');action.disabled=true;$('#fishing-phase').textContent='01 / CAST';announce('A small ripple. Let the pond settle.');label('Casting…');startLoop();}
+  function castLine(){item=pick();cast={...aim};tracked=null;if(item.type==='koi'){const request={x:cast.x,y:cast.y};document.dispatchEvent(new CustomEvent('portfolio:fishing-select',{detail:request}));if(!request.model){announce('The pond is settling. Try another cast.');return;}tracked=request;item={...item,name:request.model.name,note:'This very koi is now in your collection. Yours to keep.'};}phase=Math.random()*6.28;landed=false;setState('casting');action.disabled=true;$('#fishing-phase').textContent='01 / CAST';announce('A small ripple. Let the pond settle.');label('Casting…');startLoop();}
   let waitFor=3;
   function hook(){setState('reeling');progress=.35;zone=.35;velocity=0;target=.5;$('#fishing-phase').textContent='02 / REEL';announce('Hold to lift the green bar. Release to let it fall. Keep the fish inside.');label('Hold to reel ↑');action.disabled=false;}
   function caught(){
-    if(landed)return;landed=true;setState('landed');
+    if(landed)return;landed=true;if(item.type==='koi'){haulFrom=tracked.position();const appearance=tracked.capture();if(!saved.inventory.some(a=>a.id===appearance.id)){saved.inventory.push(appearance);saved.fish++;if(!saved.found.includes(item.name))saved.found.push(item.name);journal();}setState('hauling');}else setState('landed');
     $('#catch-kind').textContent=item.type==='koi'?'A LITTLE DISCOVERY':'A CLEANER POND';$('#catch-name').textContent=item.name;$('#catch-detail').textContent=item.note;
-    $('#fishing-phase').textContent='03 / CATCH';announce(item.type==='koi'?`${item.name} caught. Let’s return it to the water.`:`${item.name} caught. The fisherman will put it in the bin.`);label(item.type==='koi'?'Release koi ↗':'Put in bin ↗');action.disabled=false;
+    $('#fishing-phase').textContent='03 / CATCH';announce(item.type==='koi'?`${item.name} caught and saved to your inventory. Yours to keep.`:`${item.name} caught. The fisherman will put it in the bin.`);label(item.type==='koi'?'Cast again ↗':'Put in bin ↗');action.disabled=item.type==='koi';
   }
-  function resolve(){setState(item.type==='koi'?'releasing':'disposing');action.disabled=true;label(item.type==='koi'?'Returning to pond…':'Cleaning up…');announce(item.type==='koi'?'Back to the pond, safe and sound.':'A clean toss into the bin. One less thing in the water.');}
+  function resolve(){if(item.type==='koi'){idle('Your koi is safely in the collection. Ready for another cast?');return;}setState('disposing');action.disabled=true;label('Cleaning up…');announce('A clean toss into the bin. One less thing in the water.');}
   function update(dt){
     clock+=dt;timer+=dt;
     if(state==='casting'&&timer>=.8){setState('waiting');waitFor=2.2+Math.random()*2;$('#fishing-phase').textContent='WAIT / WATCH THE BOBBER';announce('Watch the float. A bite is coming…');label('Waiting for a bite…');}
@@ -137,11 +143,11 @@
       progress=clamp(progress+(inside?(easy?.24:.19):-(easy?.055:.1))*dt,0,1);
       $('.meter-zone').style.bottom=zone*100+'%';$('.meter-zone').style.height=zoneSize*100+'%';$('.meter-zone').style.background=inside?'#c8e99b99':'#c8e99b44';$('.meter-fish').style.bottom=target*100+'%';$('.catch-progress>span').style.height=progress*100+'%';$('.meter-percent').textContent=Math.round(progress*100)+'%';
       if(progress>=1)caught();else if(progress<=0||timer>50)idle('The line went slack. No worries — there’s always another cast.');
-    }else if((state==='disposing'||state==='releasing')&&timer>=1.7){if(item.type==='koi'){saved.fish++;if(!saved.found.includes(item.name))saved.found.push(item.name);}else saved.clean++;journal();idle(item.type==='koi'?'Koi returned. A good moment, safely kept.':'Cleanup complete. The pond is a little better for it.');}
+    }else if(state==='hauling'&&timer>=.9){setState('landed');label('Cast again ↗');action.disabled=false;}else if(state==='disposing'&&timer>=1.7){saved.clean++;journal();idle('Cleanup complete. The pond is a little better for it.');}
   }
   function frame(now){raf=0;if(paused||state==='welcome'||document.hidden)return;const dt=Math.min((now-last)/1000||.016,.04);last=now;update(dt);draw();raf=requestAnimationFrame(frame);}
   function startLoop(){if(!raf&&!paused&&state!=='welcome'){last=performance.now();raf=requestAnimationFrame(frame);}}
-  function togglePause(force){if(state==='welcome')return;paused=typeof force==='boolean'?force:!paused;held=false;action.classList.remove('is-held');pondSignal();pause.textContent=paused?'Resume':'Pause';action.disabled=paused||['casting','waiting','disposing','releasing'].includes(state);if(paused){cancelAnimationFrame(raf);raf=0;announce('Fishing paused. Your catch and progress are safe.');draw();}else{announce(state==='reeling'?'Hold to lift; release to drop. Keep the fish in the green bar.':'Back at the pond. Take your time.');startLoop();}}
+  function togglePause(force){if(state==='welcome')return;paused=typeof force==='boolean'?force:!paused;held=false;action.classList.remove('is-held');pondSignal();pause.textContent=paused?'Resume':'Pause';action.disabled=paused||['casting','waiting','disposing','hauling'].includes(state);if(paused){cancelAnimationFrame(raf);raf=0;announce('Fishing paused. Your catch and progress are safe.');draw();}else{announce(state==='reeling'?'Hold to lift; release to drop. Keep the fish in the green bar.':'Back at the pond. Take your time.');startLoop();}}
   function interact(){if(paused)return;if(state==='idle')castLine();else if(state==='bite')hook();else if(state==='landed')resolve();}
   function press(){if(state==='reeling'&&!paused){held=true;reelGesture=true;action.classList.add('is-held');}}
   function release(){if(reelGesture){lastReelInput=performance.now();reelGesture=false;}held=false;action.classList.remove('is-held');}
@@ -153,5 +159,5 @@
   canvas.addEventListener('keydown',keyDown);action.addEventListener('keydown',keyDown);[canvas,action].forEach(el=>{el.addEventListener('keyup',e=>{if(e.key===' '){e.preventDefault();release();}});el.addEventListener('blur',release);});
   pause.addEventListener('click',()=>togglePause());document.addEventListener('visibilitychange',()=>{if(document.hidden)togglePause(true);});document.addEventListener('portfolio:pond-open',()=>togglePause(true));
   new IntersectionObserver(entries=>{if(!entries[0].isIntersecting)togglePause(true);},{threshold:.05}).observe(canvas);
-  new ResizeObserver(resize).observe(canvas);journal();resize();
+  new ResizeObserver(resize).observe(canvas);journal();resize();document.addEventListener('portfolio:koi-ready',renderInventory);
 })();

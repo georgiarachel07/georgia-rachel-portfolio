@@ -21,10 +21,13 @@
   }
   const hero=createScene('pond-canvas',4),full=createScene('immersive-pond',7),intro=createScene('startup-canvas',4),testimonials=createScene('testimonial-pond',5),fishing=createScene('fishing-pond',6);
   const palettes=[['#eee5cf','#d5603d','#344139'],['#eee9d8','#b4432e','#242d2b'],['#d9a65b','#b16e32','#efe2b9'],['#e9e3cd','#303d3a','#e09255']];
+  const fishingUsedSeeds=new Set();let fishingNextSeed=0;
+  try{const inventory=JSON.parse(localStorage.getItem('georgia-quiet-catch-v1'))?.inventory||[];inventory.forEach(f=>{if(Number.isFinite(f.seed))fishingUsedSeeds.add(f.seed);});}catch{}
   function makeFish(scene,index){
+    if(scene===fishing){do{fishingNextSeed++;}while(fishingUsedSeeds.has(fishingNextSeed));index=fishingNextSeed-1;fishingUsedSeeds.add(fishingNextSeed);}
     const random=(n)=>(Math.sin((index+1)*37.21+n*17.87)*.5+.5);
     const x=scene.w*(.22+random(1)*.56),y=scene.h*(.18+random(2)*.6);
-    return {x,y,angle:random(3)*TAU,turn:0,phase:index*2.37,size:scene.clear?92:(scene.w<500?87:114)*(index%3===0?1.13:.9),speed:scene.clear?40:22+random(4)*13,seed:index+1,palette:palettes[index%palettes.length],depth:random(5),velocity:20,angularSpeed:0,swimPhase:index*2.37,joints:Array(25).fill(0),pose:null};
+    return {id:scene===fishing?'pond-koi-'+(index+1):'ambient-koi-'+index,name:['Showa','Kohaku','Golden Ogon','Shiro Bekko','Tancho'][index%5],x,y,angle:random(3)*TAU,turn:0,phase:index*2.37,size:scene.clear?92:(scene.w<500?87:114)*(index%3===0?1.13:.9),speed:scene.clear?40:22+random(4)*13,seed:index+1,palette:scene===fishing?[palettes[0],palettes[1],palettes[2],palettes[3],['#eee9d4','#b34c34','#eee9d4']][index%5]:palettes[index%palettes.length],depth:random(5),velocity:20,angularSpeed:0,swimPhase:index*2.37,joints:Array(25).fill(0),pose:null};
   }
   function resize(scene){
     const box=scene.canvas.getBoundingClientRect();if(!box.width||!box.height)return;
@@ -87,7 +90,7 @@
     ctx.fillStyle=f.palette[0];ctx.fill(shape);
     ctx.save();ctx.clip(shape);
     // Each fish has stable, asymmetrical markings attached to its moving body.
-    for(let i=0;i<6;i++){
+    for(let i=0;i<(f.name==='Tancho'?1:6);i++){
       const t=.07+i*.142,p=bodyShape(f,t),side=Math.sin(f.seed*11+i*7)*.65;
       ctx.fillStyle=i%3===2?f.palette[2]:f.palette[1];
       ctx.beginPath();ctx.ellipse(p.x,p.y+side*widthAt(t,l),l*(.045+Math.abs(Math.sin(i+f.seed))*.025),l*(.065+Math.abs(Math.cos(i*3))*.035),Math.sin(i*2+f.seed)*.8,0,TAU);ctx.fill();
@@ -174,17 +177,30 @@
   new IntersectionObserver(entries=>{heroVisible=entries[0].isIntersecting;if(heroVisible)start();},{threshold:0}).observe(hero.canvas);
   new IntersectionObserver(entries=>{testimonialVisible=entries[0].isIntersecting;if(testimonialVisible)start();},{threshold:0}).observe(testimonials.canvas);
   new IntersectionObserver(entries=>{fishingVisible=entries[0].isIntersecting;if(fishingVisible)start();},{threshold:0}).observe(fishing.canvas);
-  // The fishing game shares normalized lure coordinates with the pond renderer.
+  // A cast locks one actual pond object; capture removes that same object.
+  let fishingSerial=6;
+  document.addEventListener('portfolio:fishing-select',event=>{
+    const request=event.detail,px=request.x*fishing.w,py=request.y*fishing.h;
+    const f=[...fishing.fish].sort((a,b)=>Math.hypot(a.x-px,a.y-py)-Math.hypot(b.x-px,b.y-py))[0];
+    if(!f)return;
+    fishing.selected=f;request.model=f;
+    request.appearance={id:f.id,name:f.name,seed:f.seed,palette:[...f.palette],size:f.size,phase:f.phase,swimPhase:f.swimPhase,pose:f.pose?.map(p=>({...p}))};
+    request.position=()=>({x:f.x/fishing.w,y:f.y/fishing.h});
+    request.capture=()=>{const i=fishing.fish.indexOf(f);if(i>=0)fishing.fish.splice(i,1);fishing.hooked=null;fishing.target=null;fishing.selected=null;return {id:f.id,name:f.name,seed:f.seed,palette:[...f.palette],size:f.size,phase:f.phase,swimPhase:f.swimPhase,pose:f.pose.map(p=>({...p}))};};
+    request.draw=(ctx,x,y,size,angle)=>drawCaughtFish(ctx,f,x,y,size,angle);
+  });
+  function drawCaughtFish(ctx,f,x,y,size,angle=0){ctx.save();ctx.translate(x,y);ctx.rotate(angle);const xs=f.pose.map(p=>p.x),ys=f.pose.map(p=>p.y),left=Math.min(...xs)-f.size*.28,right=Math.max(...xs)+f.size*.2,top=Math.min(...ys)-f.size*.26,bottom=Math.max(...ys)+f.size*.26,ratio=size/Math.max(right-left,bottom-top);ctx.scale(ratio,ratio);ctx.translate(-(left+right)/2,-(top+bottom)/2);paintFish(ctx,{...f,x:0,y:0,angle:0});ctx.restore();}
+  document.addEventListener('portfolio:fishing-render',event=>{const {ctx,appearance,x,y,size}=event.detail;if(appearance?.pose)drawCaughtFish(ctx,appearance,x,y,size);});
   document.addEventListener('portfolio:fishing',event=>{
-    const {state,x,y,paused}=event.detail;fishing.gamePaused=paused;const previousHook=fishing.hooked;
+    const {state,x,y,paused,fishId}=event.detail;fishing.gamePaused=paused;
+    if(state==='casting'&&fishing.fish.length<6){const f=makeFish(fishing,fishingSerial++);f.x=fishing.w+25;fishing.fish.push(f);}
+    const selected=fishing.fish.find(f=>f.id===fishId);
     fishing.hooked=null;
-    if(['waiting','bite','reeling'].includes(state)){
-      const px=x*fishing.w,py=y*fishing.h;
-      const nearby=[...fishing.fish].sort((a,b)=>Math.hypot(a.x-px,a.y-py)-Math.hypot(b.x-px,b.y-py));
-      fishing.target={x:px,y:py,until:Infinity,followers:new Set(nearby.slice(0,state==='reeling'?1:3))};
-      if(state==='reeling'||state==='bite'){fishing.hooked=previousHook||nearby[0];if(state==='reeling')fishing.target.followers=new Set([fishing.hooked]);}
-      fishing.ripples.push({x:px,y:py,born:time});
-    }else{fishing.target=null;}
+    if(selected&&['casting','waiting','bite','reeling'].includes(state)){
+      fishing.selected=selected;fishing.target={x:x*fishing.w,y:y*fishing.h,until:Infinity,followers:new Set([selected])};
+      if(state==='reeling'||state==='bite')fishing.hooked=selected;
+      if(state==='waiting')fishing.ripples.push({x:x*fishing.w,y:y*fishing.h,born:time});
+    }else{fishing.target=null;fishing.selected=null;}
     if(!motion)draw(fishing);start();
   });
   function closePond(){dialog.close();}
@@ -229,4 +245,5 @@
   if(introActive)setTimeout(finishIntro,reduced?250:1350);else startup.hidden=true;
   if(!motion)draw(intro);
 
+document.dispatchEvent(new Event('portfolio:koi-ready'));
 })();
