@@ -20,7 +20,8 @@
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
   function announce(text){$('#fishing-status').textContent=text;}
   function label(text){action.textContent=text;}
-  function setState(next){state=next;timer=0;held=false;action.classList.remove('is-held');canvas.dataset.phase=state;meter.hidden=state!=='reeling';result.hidden=!['landed','disposing','releasing'].includes(state);}
+  function pondSignal(){document.dispatchEvent(new CustomEvent('portfolio:fishing',{detail:{state,paused,x:cast.x,y:cast.y}}));}
+  function setState(next){state=next;timer=0;pondSignal();held=false;action.classList.remove('is-held');canvas.dataset.phase=state;meter.hidden=state!=='reeling';result.hidden=!['landed','disposing','releasing'].includes(state);}
   function journal(){
     $('#fishing-count').textContent=saved.fish;$('#cleanup-count').textContent=saved.clean;$('#variety-count').textContent=saved.found.length+' / 5';
     $('#fishing-journal').replaceChildren(...kinds.slice(0,5).map(k=>{const el=document.createElement('span'),found=saved.found.includes(k.name);el.className=found?'found':'';el.textContent=found?'✓ '+k.name:'— Undiscovered koi';return el;}));
@@ -53,24 +54,53 @@
     // Cleanup bin stays visible beside the fisherman.
     const binX=dockW*.18,binY=h*.88;
     ctx.save();ctx.translate(binX,binY);ctx.fillStyle='#304d3b';ctx.beginPath();ctx.roundRect(-14*scale,-18*scale,28*scale,36*scale,3);ctx.fill();ctx.strokeStyle='#bcc79d';ctx.stroke();ctx.fillStyle='#c6d5a9';ctx.fillRect(-17*scale,-21*scale,34*scale,5*scale);ctx.font=`${9*scale}px monospace`;ctx.textAlign='center';ctx.fillText('BIN',0,4*scale);ctx.restore();
-    // Figure: wide straw hat, linen shirt, crossed legs and articulated casting arm.
+    // Shared linen / straw palette; poses are driven by the game phase.
+    const victory=['landed','disposing','releasing'].includes(state),struggle=state==='reeling'||state==='bite';
+    const reduced=document.documentElement.classList.contains('motion-paused');
+    const lift=victory?(state==='landed'?1-Math.pow(1-clamp(timer/.4,0,1),3):1):0;
+    const tug=struggle?Math.sin(clock*11)*2.5+Math.sin(clock*4.3)*3:0;
     const arm=state==='disposing'?Math.sin(clamp(timer/1.5,0,1)*Math.PI)*.8:state==='casting'?-Math.sin(timer/.8*Math.PI)*.7:held?-.18:0;
-    ctx.save();ctx.translate(sx,sy);ctx.scale(scale,scale);ctx.fillStyle='#1c362b55';ctx.beginPath();ctx.ellipse(0,25,37,14,0,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#263f34';ctx.lineWidth=11;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-8,17);ctx.lineTo(10,34);ctx.lineTo(26,25);ctx.moveTo(9,16);ctx.lineTo(23,27);ctx.lineTo(28,36);ctx.stroke();
-    ctx.fillStyle='#e3dfbd';ctx.beginPath();ctx.ellipse(0,6,17,25,-.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#c5c6a4';ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(27,-9+arm*25);ctx.stroke();
-    ctx.fillStyle='#bb956e';ctx.beginPath();ctx.arc(28,-9+arm*25,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d4bf85';ctx.beginPath();ctx.ellipse(-2,-17,29,17,-.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#9b8a5b';ctx.lineWidth=1;ctx.stroke();ctx.fillStyle='#bda772';ctx.beginPath();ctx.ellipse(-4,-21,15,11,-.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#667452';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(-3,-18,16,8,-.2,0,Math.PI);ctx.stroke();ctx.restore();
-    const rodX=sx+28*scale,rodY=sy+(-9+arm*25)*scale,tipX=rodX+65*scale,tipY=rodY-105*scale;
-    ctx.strokeStyle='#d4c78e';ctx.lineWidth=2.6;ctx.beginPath();ctx.moveTo(rodX,rodY);ctx.quadraticCurveTo(tipX-12,tipY+30,tipX,tipY);ctx.stroke();
+    ctx.save();ctx.translate(sx+tug*scale,sy);ctx.scale(scale,scale);
+    ctx.fillStyle='#1c362b55';ctx.beginPath();ctx.ellipse(0,25,37,14,0,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#263f34';ctx.lineWidth=11;ctx.lineCap='round';ctx.beginPath();
+    ctx.moveTo(-8,17-lift*12);ctx.lineTo(lerp(10,-10,lift),lerp(34,30,lift));ctx.lineTo(lerp(26,-16,lift),lerp(25,34,lift));
+    ctx.moveTo(9,16-lift*12);ctx.lineTo(lerp(23,12,lift),lerp(27,30,lift));ctx.lineTo(lerp(28,19,lift),lerp(36,34,lift));ctx.stroke();
+    const lean=struggle?-.2-Math.abs(Math.sin(clock*5))*.09:-.2;
+    ctx.fillStyle='#e3dfbd';ctx.beginPath();ctx.ellipse(0,6-lift*27,17,25,lean,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#c5c6a4';ctx.lineWidth=8;ctx.beginPath();
+    if(victory){ctx.moveTo(-12,-24*lift);ctx.quadraticCurveTo(-26,-40*lift,-17,-72*lift);ctx.moveTo(12,-24*lift);ctx.quadraticCurveTo(29,-43*lift,21,-72*lift);}
+    else{ctx.moveTo(8,0);ctx.lineTo(27,-9+arm*25);ctx.moveTo(-10,1);ctx.lineTo(19+Math.cos(clock*12)*(held?5:1),-1+Math.sin(clock*12)*(held?5:1));}ctx.stroke();
+    ctx.fillStyle='#bb956e';for(const hand of victory?[[-17,-72*lift],[21,-72*lift]]:[[28,-9+arm*25],[19+Math.cos(clock*12)*(held?5:1),-1+Math.sin(clock*12)*(held?5:1)]]){ctx.beginPath();ctx.arc(hand[0],hand[1],4.5,0,Math.PI*2);ctx.fill();}
+    if(victory){ctx.fillStyle='#c5a07a';ctx.beginPath();ctx.ellipse(0,-40*lift,12,14,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#263f34';ctx.fillRect(-5,-42*lift,2,2);ctx.fillRect(4,-42*lift,2,2);ctx.strokeStyle='#6b593e';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,-38*lift,4,.2,Math.PI-.2);ctx.stroke();}
+    const hatY=-17-lift*39;
+    ctx.fillStyle='#d4bf85';ctx.beginPath();ctx.ellipse(-2,hatY,29,17-lift*8,-.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#9b8a5b';ctx.lineWidth=1;ctx.stroke();ctx.fillStyle='#bda772';ctx.beginPath();ctx.ellipse(-4,hatY-4,15,11-lift*5,-.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#667452';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(-3,hatY-1,16,8-lift*4,-.2,0,Math.PI);ctx.stroke();ctx.restore();
+    const rodX=sx+(28+tug)*scale,rodY=sy+(-9+arm*25)*scale;
+    const tension=struggle?(.6+Math.abs(Math.sin(clock*5))*.4):0;
+    const tipX=rodX+(65+tension*23)*scale,tipY=rodY-(105-tension*36)*scale;
+    if(!victory){
+      ctx.strokeStyle='#d4c78e';ctx.lineWidth=2.6;ctx.beginPath();ctx.moveTo(rodX,rodY);ctx.bezierCurveTo(rodX+8*scale,rodY-84*scale,tipX-15*scale,tipY-40*tension*scale,tipX,tipY);ctx.stroke();
+      // Crank and hand visibly revolve while the player reels.
+      const crank=held?clock*13:clock*.8,cx=rodX-7*scale,cy=rodY+9*scale;
+      ctx.fillStyle='#415e46';ctx.strokeStyle='#d9ce9d';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,7*scale,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(crank)*10*scale,cy+Math.sin(crank)*10*scale);ctx.stroke();ctx.fillStyle='#e0c296';ctx.beginPath();ctx.arc(cx+Math.cos(crank)*10*scale,cy+Math.sin(crank)*10*scale,3*scale,0,Math.PI*2);ctx.fill();
+    }
     let bx=cast.x*w,by=cast.y*h;
+    if(struggle){bx+=Math.sin(clock*9)*13+Math.sin(clock*3)*9;by+=Math.cos(clock*11)*6;}
     if(state==='casting'){const q=clamp(timer/.8,0,1);bx=lerp(tipX,bx,q);by=lerp(tipY,by,q)-Math.sin(q*Math.PI)*h*.2;}
     if(['casting','waiting','bite','reeling'].includes(state)){
-      ctx.strokeStyle='#e8e7c699';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(tipX,tipY);ctx.quadraticCurveTo((tipX+bx)/2,Math.max(tipY,by)-20,bx,by);ctx.stroke();
+      ctx.strokeStyle='#e8e7c699';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(tipX,tipY);ctx.quadraticCurveTo((tipX+bx)/2,Math.min(tipY,by)+(struggle?5:25),bx,by);ctx.stroke();
       const bob=state==='bite'?Math.sin(clock*18)*5:Math.sin(clock*3)*2;ctx.strokeStyle='#dce6bd77';ctx.beginPath();ctx.ellipse(bx,by+5,16+Math.sin(clock*3)*3,7,0,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#f0ead1';ctx.beginPath();ctx.ellipse(bx,by+bob,4,8,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#b76446';ctx.beginPath();ctx.arc(bx,by-3+bob,4,Math.PI,Math.PI*2);ctx.fill();
+      if(struggle){for(let i=0;i<7;i++){const a=i*2.399+clock*2,r=12+((clock*36+i*5)%25);ctx.globalAlpha=1-r/40;ctx.fillStyle='#e9edcc';ctx.beginPath();ctx.ellipse(bx+Math.cos(a)*r,by+Math.sin(a)*r*.45,2,1.1,a,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
       if(state==='bite'){ctx.fillStyle='#f3e2a7';ctx.font='bold 40px serif';ctx.textAlign='center';ctx.fillText('!',bx,by-27);}
     }
     if(state==='idle'&&!paused){ctx.strokeStyle='#ecedc755';ctx.setLineDash([3,5]);ctx.beginPath();ctx.ellipse(aim.x*w,aim.y*h,18,9,0,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
     if(['landed','disposing','releasing'].includes(state)){
-      let x=sx+60*scale,y=sy-45*scale,a=-.3;
+      let x=sx+2*scale,y=sy-(30+lift*58)*scale,a=Math.sin(clock*3)*.035;
+      if(state==='landed'){
+        const burst=clamp(timer/1.1,0,1);
+        if(!reduced&&burst<1){for(let i=0;i<16;i++){const angle=i*2.399,r=(12+burst*70)*scale;ctx.globalAlpha=(1-burst)*.9;ctx.fillStyle=i%3?'#dce8b6':'#d7b872';ctx.save();ctx.translate(x+Math.cos(angle)*r,y+Math.sin(angle)*r*.75+burst*burst*22);ctx.rotate(angle+burst*3);ctx.fillRect(-1.5,-3,3,6);ctx.restore();}ctx.globalAlpha=1;}
+        ctx.textAlign='center';ctx.font=`${8*scale}px monospace`;ctx.fillStyle='#edf0cd';ctx.fillText('ITEM ACQUIRED',sx,sy-122*scale);
+        ctx.strokeStyle='#d9dca944';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(x,y,42*scale,25*scale,0,0,Math.PI*2);ctx.stroke();
+      }
       if(state==='disposing'){const q=clamp(timer/1.5,0,1);x=lerp(x,binX,q);y=lerp(y,binY-17,q)-Math.sin(q*Math.PI)*h*.25;a=q*5;if(q>.96)ctx.globalAlpha=0;}
       if(state==='releasing'){const q=clamp(timer/1.5,0,1);x=lerp(x,w*.57,q);y=lerp(y,h*.45,q)-Math.sin(q*Math.PI)*h*.16;ctx.globalAlpha=1-q;}
       drawItem(item,x,y,58*scale,a);ctx.globalAlpha=1;
@@ -110,7 +140,7 @@
   }
   function frame(now){raf=0;if(paused||state==='welcome'||document.hidden)return;const dt=Math.min((now-last)/1000||.016,.04);last=now;update(dt);draw();raf=requestAnimationFrame(frame);}
   function startLoop(){if(!raf&&!paused&&state!=='welcome'){last=performance.now();raf=requestAnimationFrame(frame);}}
-  function togglePause(force){if(state==='welcome')return;paused=typeof force==='boolean'?force:!paused;held=false;action.classList.remove('is-held');pause.textContent=paused?'Resume':'Pause';action.disabled=paused||['casting','waiting','disposing','releasing'].includes(state);if(paused){cancelAnimationFrame(raf);raf=0;announce('Fishing paused. Your catch and progress are safe.');draw();}else{announce(state==='reeling'?'Hold to lift; release to drop. Keep the fish in the green bar.':'Back at the pond. Take your time.');startLoop();}}
+  function togglePause(force){if(state==='welcome')return;paused=typeof force==='boolean'?force:!paused;held=false;action.classList.remove('is-held');pondSignal();pause.textContent=paused?'Resume':'Pause';action.disabled=paused||['casting','waiting','disposing','releasing'].includes(state);if(paused){cancelAnimationFrame(raf);raf=0;announce('Fishing paused. Your catch and progress are safe.');draw();}else{announce(state==='reeling'?'Hold to lift; release to drop. Keep the fish in the green bar.':'Back at the pond. Take your time.');startLoop();}}
   function interact(){if(paused)return;if(state==='idle')castLine();else if(state==='bite')hook();else if(state==='landed')resolve();}
   function press(){if(state==='reeling'&&!paused){held=true;action.classList.add('is-held');}}
   function release(){held=false;action.classList.remove('is-held');}

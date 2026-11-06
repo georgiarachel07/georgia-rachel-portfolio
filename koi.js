@@ -112,17 +112,19 @@
       if(f.x<margin)vx+=(margin-f.x)/margin*2.4;if(f.x>w-margin)vx-=(f.x-w+margin)/margin*2.4;
       if(f.y<margin)vy+=(margin-f.y)/margin*2.4;if(f.y>h-margin)vy-=(f.y-h+margin)/margin*2.4;
       scene.fish.forEach(other=>{if(other===f)return;const dx=f.x-other.x,dy=f.y-other.y,d=Math.hypot(dx,dy);if(d<70&&d>0){vx+=dx/d*(1-d/70)*1.2;vy+=dy/d*(1-d/70)*1.2;}});
-      if(scene.target&&scene.target.until>time){const dx=scene.target.x-f.x,dy=scene.target.y-f.y,d=Math.hypot(dx,dy)||1;const circle=d<48?1.1:0;vx+=dx/d*2.3-dy/d*circle;vy+=dy/d*2.3+dx/d*circle;desiredSpeed=f.speed*(d>65?1.65:.62);}
-      else if(scene.target)scene.target=null;
+      if(scene.target&&scene.target.until>time&&(!scene.target.followers||scene.target.followers.has(f))){const dx=scene.target.x-f.x,dy=scene.target.y-f.y,d=Math.hypot(dx,dy)||1;const circle=d<48?1.1:0;vx+=dx/d*2.3-dy/d*circle;vy+=dy/d*2.3+dx/d*circle;desiredSpeed=f.speed*(d>65?1.65:.62);}
+      else if(scene.target&&scene.target.until<=time)scene.target=null;
       desired=Math.atan2(vy,vx);
     }
-    const difference=angleDelta(desired,f.angle),turnGoal=clamp(difference*1.35,-.85,.85);
+    const hooked=scene===fishing&&scene.hooked===f,turnLimit=hooked?3.8:.85;
+    const difference=angleDelta(desired,f.angle),turnGoal=clamp(difference*(hooked?5:1.35),-turnLimit,turnLimit);
     f.angularSpeed+=(turnGoal-f.angularSpeed)*(1-Math.exp(-dt*3));
     f.angle+=f.angularSpeed*dt;f.turn+=(f.angularSpeed-f.turn)*(1-Math.exp(-dt*3));
     const coast=.86+.14*Math.sin(time*.7+f.phase);
     f.velocity+=(desiredSpeed*coast-f.velocity)*(1-Math.exp(-dt*1.7));
     f.x+=Math.cos(f.angle)*f.velocity*dt;f.y+=Math.sin(f.angle)*f.velocity*dt;
     f.x=clamp(f.x,-35,w+35);f.y=clamp(f.y,-35,h+35);
+    if(hooked){const tx=scene.target.x+Math.sin(time*8)*27,ty=scene.target.y+Math.cos(time*11)*14;f.x+=(tx-f.x)*(1-Math.exp(-dt*3));f.y+=(ty-f.y)*(1-Math.exp(-dt*3));f.angle+=Math.sin(time*18)*dt*2.8;f.swimPhase+=dt*9;}
     updateBody(f,dt);
   }
 
@@ -172,6 +174,19 @@
   new IntersectionObserver(entries=>{heroVisible=entries[0].isIntersecting;if(heroVisible)start();},{threshold:0}).observe(hero.canvas);
   new IntersectionObserver(entries=>{testimonialVisible=entries[0].isIntersecting;if(testimonialVisible)start();},{threshold:0}).observe(testimonials.canvas);
   new IntersectionObserver(entries=>{fishingVisible=entries[0].isIntersecting;if(fishingVisible)start();},{threshold:0}).observe(fishing.canvas);
+  // The fishing game shares normalized lure coordinates with the pond renderer.
+  document.addEventListener('portfolio:fishing',event=>{
+    const {state,x,y,paused}=event.detail;fishing.gamePaused=paused;const previousHook=fishing.hooked;
+    fishing.hooked=null;
+    if(['waiting','bite','reeling'].includes(state)){
+      const px=x*fishing.w,py=y*fishing.h;
+      const nearby=[...fishing.fish].sort((a,b)=>Math.hypot(a.x-px,a.y-py)-Math.hypot(b.x-px,b.y-py));
+      fishing.target={x:px,y:py,until:Infinity,followers:new Set(nearby.slice(0,state==='reeling'?1:3))};
+      if(state==='reeling'||state==='bite'){fishing.hooked=previousHook||nearby[0];if(state==='reeling')fishing.target.followers=new Set([fishing.hooked]);}
+      fishing.ripples.push({x:px,y:py,born:time});
+    }else{fishing.target=null;}
+    if(!motion)draw(fishing);start();
+  });
   function closePond(){dialog.close();}
   document.querySelectorAll('[data-open-pond]').forEach(b=>b.addEventListener('click',()=>{
     opener=b;dialog.showModal();immersive=true;start();root.classList.add('pond-is-open');resize(full);
@@ -185,7 +200,7 @@
     if(now-last<1000/60){raf=requestAnimationFrame(tick);return;}
     const dt=Math.min((now-last)/1000||.033,.065);last=now;time+=dt;
     const active=introActive?[intro]:immersive?[full]:[...(heroVisible?[hero]:[]),...(testimonialVisible?[testimonials]:[]),...(fishingVisible?[fishing]:[])];
-    active.forEach(scene=>{scene.fish.forEach(f=>steer(scene,f,dt));scene.ripples=scene.ripples.filter(r=>time-r.born<3.5);scene.food=scene.food.filter(p=>time-p.born<5);draw(scene);});
+    active.forEach(scene=>{if(scene===fishing&&scene.gamePaused)return;scene.fish.forEach(f=>steer(scene,f,dt));scene.ripples=scene.ripples.filter(r=>time-r.born<3.5);scene.food=scene.food.filter(p=>time-p.born<5);draw(scene);});
     raf=requestAnimationFrame(tick);
   }
   function start(){if(!raf&&motion&&!document.hidden){last=performance.now();raf=requestAnimationFrame(tick);}}
