@@ -9,7 +9,7 @@
   const TAU=Math.PI*2,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const angleDelta=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
   let motion=!document.documentElement.classList.contains('motion-paused');
-  let time=0,last=0,raf=0,heroVisible=true,immersive=false,introActive=document.documentElement.classList.contains('intro-pending'),opener=null;
+  let time=0,last=0,raf=0,heroVisible=true,testimonialVisible=false,immersive=false,introActive=document.documentElement.classList.contains('intro-pending'),opener=null;
   const dialog=document.getElementById('pond-dialog');
   const root=document.documentElement;
   const scenes=[];
@@ -19,7 +19,7 @@
     const scene={canvas,ctx,clear,count,w:600,h:470,fish:[],ripples:[],target:null,food:[],visible:true,scale:1};
     scenes.push(scene);return scene;
   }
-  const hero=createScene('pond-canvas',4),full=createScene('immersive-pond',7),intro=createScene('startup-canvas',4);
+  const hero=createScene('pond-canvas',4),full=createScene('immersive-pond',7),intro=createScene('startup-canvas',4),testimonials=createScene('testimonial-pond',5);
   const palettes=[['#eee5cf','#d5603d','#344139'],['#eee9d8','#b4432e','#242d2b'],['#d9a65b','#b16e32','#efe2b9'],['#e9e3cd','#303d3a','#e09255']];
   function makeFish(scene,index){
     const random=(n)=>(Math.sin((index+1)*37.21+n*17.87)*.5+.5);
@@ -148,7 +148,7 @@
       scene.food.forEach(p=>{const age=time-p.born;if(age<5){ctx.globalAlpha=1-age/5;ctx.fillStyle='#e1bd6d';ctx.beginPath();ctx.arc(p.x+Math.sin(age+p.seed)*age,p.y+Math.cos(age+p.seed)*age,1.8,0,TAU);ctx.fill();ctx.globalAlpha=1;}});
       const sway=Math.sin(time*.18)*.035;
       leaf(ctx,w*.92,h*.08,42*scene.scale,.4+sway);leaf(ctx,w*.98,h*.23,31*scene.scale,-.3+sway);leaf(ctx,w*.83,h*.02,29*scene.scale,1+sway);
-      if(scene===full){leaf(ctx,w*.04,h*.79,55*scene.scale,.8+sway);leaf(ctx,w*.1,h*.92,37*scene.scale,-.2+sway);}
+      if(scene===full||scene===testimonials){leaf(ctx,w*.04,h*.79,55*scene.scale,.8+sway);leaf(ctx,w*.1,h*.92,37*scene.scale,-.2+sway);}
       ctx.strokeStyle='rgba(227,239,203,.08)';ctx.lineWidth=1;ctx.strokeRect(.5,.5,w-1,h-1);
     }
   }
@@ -170,6 +170,7 @@
   const resizeObserver=new ResizeObserver(entries=>{for(const entry of entries){const scene=scenes.find(s=>s.canvas===entry.target);if(scene)resize(scene);}});
   scenes.forEach(scene=>resizeObserver.observe(scene.canvas));
   new IntersectionObserver(entries=>{heroVisible=entries[0].isIntersecting;if(heroVisible)start();},{threshold:0}).observe(hero.canvas);
+  new IntersectionObserver(entries=>{testimonialVisible=entries[0].isIntersecting;if(testimonialVisible)start();},{threshold:0}).observe(testimonials.canvas);
   function closePond(){dialog.close();}
   document.querySelectorAll('[data-open-pond]').forEach(b=>b.addEventListener('click',()=>{
     opener=b;dialog.showModal();immersive=true;start();root.classList.add('pond-is-open');resize(full);
@@ -179,10 +180,10 @@
   document.getElementById('pond-close').addEventListener('click',closePond);
   dialog.addEventListener('close',()=>{immersive=false;root.classList.remove('pond-is-open');opener?.focus();});
   function tick(now){
-    raf=0;if(!motion||document.hidden||(!introActive&&!immersive&&!heroVisible))return;
+    raf=0;if(!motion||document.hidden||(!introActive&&!immersive&&!heroVisible&&!testimonialVisible))return;
     if(now-last<1000/60){raf=requestAnimationFrame(tick);return;}
     const dt=Math.min((now-last)/1000||.033,.065);last=now;time+=dt;
-    const active=introActive?[intro]:immersive?[full]:heroVisible?[hero]:[];
+    const active=introActive?[intro]:immersive?[full]:[...(heroVisible?[hero]:[]),...(testimonialVisible?[testimonials]:[])];
     active.forEach(scene=>{scene.fish.forEach(f=>steer(scene,f,dt));scene.ripples=scene.ripples.filter(r=>time-r.born<3.5);scene.food=scene.food.filter(p=>time-p.born<5);draw(scene);});
     raf=requestAnimationFrame(tick);
   }
