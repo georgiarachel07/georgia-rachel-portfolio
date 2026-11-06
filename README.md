@@ -19,8 +19,6 @@ The floating page-wide koi is removed. The pond intro is brief and skippable. Re
 
 See [CREDITS.md](CREDITS.md) for animation inspiration. No Nagomi source or assets are included.
 
-## Toolkit and sample feedback
+## Toolkit and testimonials
 
-The role heading includes AI systems, infrastructure engineering and fullstack development. The toolkit lists 13 related technologies with inline Devicon logos; attribution and license are in CREDITS.md.
-
-The section after the GitHub calendar is an illustrative sample-feedback carousel, not actual client endorsements. Five fictional first names are masked with ****. The cards move right-to-left over a koi backdrop, with hover/focus/manual pause and reduced-motion support. Replace sample text with genuine feedback before presenting it as testimonials from real people. Sources: testimonials.css, testimonials.js, koi.js and index.html.
+Thirteen inline Devicon technology logos accompany eleven user-supplied testimonials. Surnames are masked, companies omitted except AMA University, and professional roles retained. The cards flow right-to-left over a koi backdrop with accessible pause and reduced-motion controls.

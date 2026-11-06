@@ -1,4 +1,4 @@
-/* Explicitly illustrative samples: these cards are not verified endorsements. */
+/* User-supplied testimonials; surnames masked for display. */
 (() => {
   'use strict';
   const section=document.getElementById('testimonials'),viewport=section.querySelector('.reviews-viewport'),track=section.querySelector('.reviews-track'),group=section.querySelector('.reviews-group'),button=document.getElementById('reviews-pause');
