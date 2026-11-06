@@ -17,6 +17,7 @@
   let saved={fish:0,clean:0,found:[]};
   try{const v=JSON.parse(localStorage.getItem('georgia-quiet-catch-v1'));if(v&&Number.isFinite(v.fish)&&Number.isFinite(v.clean)&&Array.isArray(v.found))saved={fish:Math.max(0,Math.floor(v.fish)),clean:Math.max(0,Math.floor(v.clean)),found:v.found.filter(n=>kinds.slice(0,5).some(k=>k.name===n))};}catch{}
   let state='welcome',paused=false,held=false,raf=0,last=0,clock=0,timer=0,w=900,h=480,cast={x:.57,y:.43},aim={x:.57,y:.43},item=null,progress=.35,zone=.35,velocity=0,target=.5,phase=0,landed=false,deck=[],bites=0;
+  let reelGesture=false,lastReelInput=-Infinity;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
   function announce(text){$('#fishing-status').textContent=text;}
   function label(text){action.textContent=text;}
@@ -142,10 +143,10 @@
   function startLoop(){if(!raf&&!paused&&state!=='welcome'){last=performance.now();raf=requestAnimationFrame(frame);}}
   function togglePause(force){if(state==='welcome')return;paused=typeof force==='boolean'?force:!paused;held=false;action.classList.remove('is-held');pondSignal();pause.textContent=paused?'Resume':'Pause';action.disabled=paused||['casting','waiting','disposing','releasing'].includes(state);if(paused){cancelAnimationFrame(raf);raf=0;announce('Fishing paused. Your catch and progress are safe.');draw();}else{announce(state==='reeling'?'Hold to lift; release to drop. Keep the fish in the green bar.':'Back at the pond. Take your time.');startLoop();}}
   function interact(){if(paused)return;if(state==='idle')castLine();else if(state==='bite')hook();else if(state==='landed')resolve();}
-  function press(){if(state==='reeling'&&!paused){held=true;action.classList.add('is-held');}}
-  function release(){held=false;action.classList.remove('is-held');}
+  function press(){if(state==='reeling'&&!paused){held=true;reelGesture=true;action.classList.add('is-held');}}
+  function release(){if(reelGesture){lastReelInput=performance.now();reelGesture=false;}held=false;action.classList.remove('is-held');}
   $('#fishing-start').addEventListener('click',()=>{welcome.hidden=true;pause.disabled=false;idle();canvas.focus({preventScroll:true});startLoop();});
-  action.addEventListener('click',interact);action.addEventListener('pointerdown',e=>{if(state==='reeling'){e.preventDefault();action.setPointerCapture(e.pointerId);press();}});action.addEventListener('pointerup',release);action.addEventListener('pointercancel',release);
+  action.addEventListener('click',()=>{if(performance.now()-lastReelInput>200)interact();});action.addEventListener('pointerdown',e=>{if(state==='reeling'){e.preventDefault();action.setPointerCapture(e.pointerId);press();}});action.addEventListener('pointerup',release);action.addEventListener('pointercancel',release);
   canvas.addEventListener('pointermove',e=>{if(state!=='idle')return;const b=canvas.getBoundingClientRect();aim={x:clamp((e.clientX-b.left)/w,.4,.78),y:clamp((e.clientY-b.top)/h,.22,.62)};});
   canvas.addEventListener('pointerdown',e=>{canvas.focus({preventScroll:true});if(state==='reeling'){e.preventDefault();canvas.setPointerCapture(e.pointerId);press();}else interact();});canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);
   const keyDown=e=>{if(e.key==='Escape'){e.preventDefault();togglePause(true);}else if(e.key===' '){e.preventDefault();if(!e.repeat){if(state==='reeling')press();else interact();}}else if(e.key==='Enter'&&e.target===canvas){e.preventDefault();if(!e.repeat)interact();}else if(e.target===canvas&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();aim.x=clamp(aim.x+(e.key==='ArrowRight'?.03:e.key==='ArrowLeft'?-.03:0),.4,.78);aim.y=clamp(aim.y+(e.key==='ArrowDown'?.03:e.key==='ArrowUp'?-.03:0),.22,.62);}};
