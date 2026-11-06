@@ -10,7 +10,7 @@ Static HTML, CSS, and JavaScript. No build or dependency installation is require
 
 - `index.html`: content and layout
 - `style.css`, `immersive.css`: presentation and responsive design
-- `app.js`: portfolio interactions, calendar and arcade
+- `app.js`: portfolio interactions, calendar
 - `effects.js`: scroll effects and motion preference
 - `koi.js`: original articulated koi animation and quick startup intro
 - `assets/`: portfolio images and saved public GitHub history
@@ -23,3 +23,7 @@ See [CREDITS.md](CREDITS.md) for animation inspiration. No Nagomi source or asse
 
 Twenty-five inline Devicon technology logos accompany eleven user-supplied testimonials. Surnames are masked, companies omitted except AMA University, and professional roles retained. The cards flow right-to-left over a koi backdrop with accessible pause and reduced-motion controls.
 Toolkit: 10 languages/web technologies and 15 tools/platforms, displayed in two seamless horizontal rows. Pause on hover/focus, manual pause, offscreen sleep and shared motion preference are supported.
+
+## The Quiet Catch
+
+Section 07 replaces Cyber Gun Defense with an original koi fishing game. Cast, wait for a bite, hook, then hold to lift the green fishing bar and release to lower it. Keep the fish inside the bar to land a catch. Five koi varieties can be caught and released; four cleanup types (bug, virus, discarded can, tangled cable) are tossed into the bin by the fisherman. Gentle mode widens the bar and slows fish movement. Keyboard: Enter to cast/hook, Space to reel, arrows to aim, Escape to pause. Mouse/touch use the action button or pond. Counts and discovered varieties save locally only after release/disposal completes. Progress and game phase pause offscreen, in hidden tabs, or when the immersive pond opens. Global motion preference freezes ambient pond motion; active gameplay remains available. Sources: fishing.js, fishing.css, koi.js. No external game runtime or assets.

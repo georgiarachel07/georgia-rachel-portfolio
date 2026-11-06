@@ -31,3 +31,7 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Fishing game reference
+
+The Quiet Catch is an original Canvas 2D game using this portfolio’s existing koi renderer. The cast → bite → reel progression was informed by [Tideline by BridgeMind](https://github.com/bridge-mind/tideline), an MIT-licensed browser fishing simulator. No Tideline source code, assets, Three.js renderer, or dependencies are distributed here. The hold-to-raise fishing-bar interaction takes general inspiration from fishing minigames; no Stardew Valley assets or code are used.
