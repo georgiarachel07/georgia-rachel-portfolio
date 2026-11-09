@@ -38,7 +38,7 @@ class CalendarParser(HTMLParser):
     def result(self, year):
         result = []
         for key, day in self.days.items():
-            if not day['date'].startswith(f'{year}-'):
+            if year is not None and not day['date'].startswith(f'{year}-'):
                 continue
             label = self.labels.get(key, '').strip()
             match = re.match(r'(No|[\d,]+) contributions? on ', label)
@@ -49,15 +49,21 @@ class CalendarParser(HTMLParser):
                 raise ValueError('Invalid contribution')
             result.append({**day, 'count': count})
         result.sort(key=lambda day: day['date'])
+        if year is None:
+            if not 365 <= len(result) <= 367 or len({d['date'] for d in result}) != len(result):
+                raise ValueError('Incomplete rolling calendar')
+            return result
         expected = 366 if calendar.isleap(year) else 365
         if len(result) != expected or len({d['date'] for d in result}) != expected:
             raise ValueError(f'Incomplete {year} calendar: {len(result)} days')
         return result
 
 
-def fetch_year(year):
-    end = min(date(year, 12, 31), datetime.now(timezone.utc).date()).isoformat()
-    url = f'https://github.com/users/{USER}/contributions?from={year}-01-01&to={end}'
+def fetch_year(year=None):
+    url = f'https://github.com/users/{USER}/contributions'
+    if year is not None:
+        end = min(date(year, 12, 31), datetime.now(timezone.utc).date()).isoformat()
+        url += f'?from={year}-01-01&to={end}'
     for attempt in range(3):
         try:
             request = urllib.request.Request(url, headers={
@@ -82,7 +88,7 @@ def main():
         'updatedAt': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'total': {str(year): sum(d['count'] for d in contributions if d['date'].startswith(f'{year}-'))
                   for year in range(2019, current + 1)},
-        'contributions': contributions}
+        'contributions': contributions, 'recentContributions': fetch_year()}
     # Keep the last good snapshot if any requested year is incomplete or invalid.
     (ROOT / 'assets/github-history.json').write_text(json.dumps(data, separators=(',', ':')) + '\n', encoding='utf-8')
     print('Public GitHub calendar refreshed:', data['total'])
