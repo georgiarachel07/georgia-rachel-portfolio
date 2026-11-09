@@ -84,17 +84,21 @@ $$('[data-topic]').forEach(button => button.addEventListener('click', () => { $(
 $('#guide-panel>a').addEventListener('click', () => setGuide(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#guide-panel').hidden) { setGuide(false); guideToggle.focus(); } });
 
-// GitHub public contribution calendar with the original dated offline snapshot.
+// Public GitHub calendar mirrored hourly; the portable export keeps a dated fallback.
 (() => {
   const user = 'georgiarachel07', select = $('#gh-year'), grid = $('#gh-grid');
-  let history, sourceNote = '';
+  const mirror = `https://raw.githubusercontent.com/${user}/georgia-rachel-portfolio/main/assets/github-history.json`;
+  let history, sourceNote = '', refreshPending = false;
   const format = new Intl.DateTimeFormat('en', {month:'long', day:'numeric', year:'numeric', timeZone:'UTC'});
   function render() {
     if (!history) return;
-    const year = Number(select.value), today = new Date().toISOString().slice(0,10);
-    const lookup = new Map(history.contributions.filter(d => d.date.startsWith(year + '-')).map(d => [d.date,d]));
+    const today = new Date().toISOString().slice(0,10), now = new Date(today+'T00:00:00Z');
+    const recent = select.value === 'last', year = Number(select.value);
+    const first = recent ? new Date(Date.UTC(now.getUTCFullYear()-1,now.getUTCMonth(),now.getUTCDate())) : new Date(Date.UTC(year,0,1));
+    const end = recent ? now : new Date(Date.UTC(year,11,31));
+    const period = recent ? 'last 12 months' : String(year);
+    const lookup = new Map((recent&&history.recentContributions||history.contributions).map(d => [d.date,d]));
     grid.replaceChildren(); $('#gh-months').replaceChildren();
-    const first = new Date(Date.UTC(year,0,1)), end = new Date(Date.UTC(year,11,31));
     for (let i=0; i<first.getUTCDay(); i++) { const s=document.createElement('span'); s.setAttribute('aria-hidden','true'); grid.append(s); }
     let total=0, active=0;
     for (const date=new Date(first); date<=end && date.toISOString().slice(0,10)<=today; date.setUTCDate(date.getUTCDate()+1)) {
@@ -111,8 +115,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#guide
       if(day){total+=day.count;if(day.count>0)active++;}
       if(date.getUTCDate()===1){const m=document.createElement('span');m.textContent=date.toLocaleString('en',{month:'short',timeZone:'UTC'});m.style.gridColumn=String(Math.floor(((date-first)/86400000+first.getUTCDay())/7)+1);$('#gh-months').append(m);}
     }
-    $('#gh-total').textContent=`${total.toLocaleString()} contributions / ${active} active day${active===1?'':'s'} / ${year}`;
-    $('#gh-status').textContent=(total?`Public activity for ${year}. `:`No public contributions recorded for ${year}. `)+sourceNote;
+    $('#gh-total').textContent=`${total.toLocaleString()} contributions / ${active} active day${active===1?'':'s'} / ${period}`;
+    $('#gh-status').textContent=`Public profile activity · ${sourceNote}`;
+    $('#gh-detail').textContent='Hover or focus a day for details. Select a square to view that day on GitHub.';
   }
   grid.addEventListener('keydown',e=>{
     const cells=$$('.gh-day',grid), index=cells.indexOf(document.activeElement);
@@ -123,27 +128,37 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#guide
     }
   });
   function populate(data) {
-    if(!data || !Array.isArray(data.contributions) || !data.contributions.every(d=>/^\d{4}-\d{2}-\d{2}$/.test(d.date)&&Number.isFinite(d.count)&&d.count>=0)) throw Error('Invalid contribution data');
+    if(!data || !Array.isArray(data.contributions) || !data.contributions.length || !data.contributions.every(d=>/^\d{4}-\d{2}-\d{2}$/.test(d.date)&&Number.isInteger(d.count)&&d.count>=0&&Number.isInteger(d.level)&&d.level>=0&&d.level<=4)) throw Error('Invalid contribution data');
+    if(new Set(data.contributions.map(d=>d.date)).size!==data.contributions.length)throw Error('Duplicate contribution dates');
+    if(data.recentContributions&&(!Array.isArray(data.recentContributions)||data.recentContributions.length<365||data.recentContributions.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||!Number.isInteger(d.count)||d.count<0||!Number.isInteger(d.level)||d.level<0||d.level>4)))throw Error('Invalid rolling calendar');
     const previous=select.value,current=new Date().getUTCFullYear();history=data;
     const years=[...new Set([current,...data.contributions.map(d=>Number(d.date.slice(0,4))).filter(y=>y<=current)])].sort((a,b)=>b-a);
-    select.replaceChildren(...years.map(y=>new Option(String(y),String(y))));
-    const latest=years.find(y=>data.contributions.some(d=>d.date.startsWith(y+'-')&&d.count>0));
-    select.value=years.includes(Number(previous))?previous:String(latest||current);select.disabled=false;render();
+    select.replaceChildren(new Option('Last 12 months','last'),...years.map(y=>new Option(String(y),String(y))));
+    select.value=previous==='last'||years.includes(Number(previous))?previous:'last';select.disabled=false;render();
+  }
+  function updatedNote(data, remote) {
+    const updated = new Date(data.updatedAt || '2026-11-05T00:00:00Z');
+    if(!Number.isFinite(updated.getTime()))throw Error('Invalid refresh date');
+    const stamp = new Intl.DateTimeFormat('en',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(updated)+' UTC';
+    return remote ? `Synced ${stamp}. Checked hourly; GitHub updates can take time.` : `Saved copy from ${stamp}.`;
   }
   async function live() {
-    $('#gh-retry').hidden=true;
+    if(refreshPending)return;refreshPending=true;
+    $('#gh-retry').disabled=true;$('#gh-retry').textContent='Checking GitHub…';
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
     try {
-      const response=await fetch(`https://github-contributions-api.jogruber.de/v4/${user}`,{signal:controller.signal});
+      const response=await fetch(mirror,{signal:controller.signal,cache:'no-store'});
       if(!response.ok)throw Error('Unable to refresh');
-      const data=await response.json();sourceNote='Live public data; updates may be delayed.';populate(data);
+      const data=await response.json();
+      if(data.username!==user||!data.updatedAt||!Number.isFinite(Date.parse(data.updatedAt)))throw Error('Unverified refresh');
+      if(history?.updatedAt&&Date.parse(data.updatedAt)<Date.parse(history.updatedAt))throw Error('Older refresh');
+      sourceNote=updatedNote(data,true);populate(data);
     } catch {
-      sourceNote=history?'Saved public snapshot from November 5, 2026. Live refresh unavailable.':'Activity is unavailable. Visit the GitHub profile above.';
+      sourceNote=history?updatedNote(history,false)+' Refresh unavailable; view the latest on GitHub.':'Activity is unavailable. Visit the GitHub profile above.';
       if(history)render();else $('#gh-status').textContent=sourceNote;
-      $('#gh-retry').hidden=false;
-    } finally {clearTimeout(timer);}
+    } finally {clearTimeout(timer);refreshPending=false;$('#gh-retry').hidden=false;$('#gh-retry').disabled=false;$('#gh-retry').textContent='Refresh activity ↻';}
   }
-  (async()=>{try{const data=window.PORTFOLIO_GITHUB_HISTORY||await(await fetch('assets/github-history.json')).json();sourceNote='Saved public snapshot from November 5, 2026. Refreshing…';populate(data);}catch{$('#gh-total').textContent='Public contributions';}await live();})();
+  (async()=>{try{const data=window.PORTFOLIO_GITHUB_HISTORY||await(await fetch('assets/github-history.json',{cache:'no-store'})).json();sourceNote=updatedNote(data,false)+' Checking for updates…';populate(data);}catch{$('#gh-total').textContent='Public contributions';}await live();})();
   select.addEventListener('change',render);$('#gh-retry').addEventListener('click',live);
 })();
 
